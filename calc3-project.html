@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vector Field Visualization - San Diego | Calculus 3 Project by Aiden Tabrizi</title>
+    
+    <!-- using leaflet for the map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        #map {
+            flex: 1;
+            height: 100%;
+        }
+        
+        #sidebar {
+            width: 320px;
+            background: white;
+            color: #333;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            font-size: 22px;
+            margin-bottom: 10px;
+            text-align: center;
+            font-weight: normal;
+        }
+        
+        .author {
+            text-align: center;
+            font-size: 13px;
+            margin-bottom: 20px;
+            color: #666;
+        }
+        
+        .control-section {
+            background: #f5f5f5;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+        }
+        
+        .control-section h3 {
+            margin-bottom: 10px;
+            font-size: 15px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+            font-weight: normal;
+        }
+        
+        .control-group {
+            margin-bottom: 10px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 13px;
+            font-weight: normal;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+            accent-color: #4a90e2;
+        }
+        
+        input[type="text"], select {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            background: white;
+            color: #333;
+            font-size: 13px;
+        }
+        
+        .value-display {
+            text-align: right;
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 8px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            font-weight: normal;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #357abd;
+        }
+        
+        .preset-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .preset-buttons button {
+            margin-top: 0;
+            font-size: 12px;
+            padding: 6px;
+        }
+        
+        #equation-display {
+            background: #e8e8e8;
+            padding: 8px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            text-align: center;
+            margin-top: 8px;
+            word-break: break-all;
+        }
+        
+        .info-section {
+            background: #f9f9f9;
+            padding: 8px;
+            border-radius: 3px;
+            margin-top: 12px;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div id="sidebar">
+        <h1>Vector Field Visualization</h1>
+        <div class="author">Calculus 3 Project by Aiden Tabrizi</div>
+        
+        <div class="info-section">
+            Hi Professor Lucas!<br>
+            I made this tool to demonstrate vector fields:<br>
+            - Enter vector field components using x and y variables<br>
+            - It supports arithmetic, trignometry, exponents, and logarithms.<br>
+            - Try the preset examples to explore different field types<br>
+            - Zoom and pan the map to explore different areas
+        </div>
+        
+        <div class="control-section">
+            <h3>Vector Field Definition</h3>
+            
+            <div class="control-group">
+                <label for="fx">F_x(x, y) = </label>
+                <input type="text" id="fx" value="y" placeholder="e.g., x, y, x*y, sin(x)">
+            </div>
+            
+            <div class="control-group">
+                <label for="fy">F_y(x, y) = </label>
+                <input type="text" id="fy" value="-x" placeholder="e.g., x, y, x+y, cos(y)">
+            </div>
+            
+            <div id="equation-display">
+                F(x,y) = ⟨y, -x⟩
+            </div>
+            
+            <button onclick="updateVectorField()">Update Vector Field</button>
+        </div>
+        
+        <div class="control-section">
+            <h3>Preset Vector Fields</h3>
+            <div class="preset-buttons">
+                <button onclick="loadPreset('rotation')">Rotation</button>
+                <button onclick="loadPreset('source')">Source</button>
+                <button onclick="loadPreset('sink')">Sink</button>
+                <button onclick="loadPreset('saddle')">Saddle</button>
+                <button onclick="loadPreset('dipole')">Dipole</button>
+                <button onclick="loadPreset('vortex')">Vortex</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- leaflet library -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- math.js so we can parse the equations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+    <script>
+        // set up the map centered on miramar air base 
+        const map = L.map('map').setView([32.8853, -117.1395], 13);
+        
+        // satellite view from esri
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+            maxZoom: 18
+        }).addTo(map);
+        
+        // this will hold all the arrows
+        let vectorFieldLayer = L.layerGroup().addTo(map);
+        
+        // update the equation display when someone types
+        document.getElementById('fx').addEventListener('input', updateEquationDisplay);
+        document.getElementById('fy').addEventListener('input', updateEquationDisplay);
+        
+        function updateEquationDisplay() {
+            const fx = document.getElementById('fx').value || '0';
+            const fy = document.getElementById('fy').value || '0';
+            document.getElementById('equation-display').textContent = `F(x,y) = ⟨${fx}, ${fy}⟩`;
+        }
+        
+        // preset examples for different vector fields
+        function loadPreset(type) {
+            const presets = {
+                'rotation': { fx: '-y', fy: 'x' },
+                'source': { fx: 'x', fy: 'y' },
+                'sink': { fx: '-x', fy: '-y' },
+                'saddle': { fx: 'x', fy: '-y' },
+                'dipole': { fx: 'x/(x^2+y^2)', fy: 'y/(x^2+y^2)' },
+                'vortex': { fx: '-y/(x^2+y^2)', fy: 'x/(x^2+y^2)' }
+            };
+            
+            if (presets[type]) {
+                document.getElementById('fx').value = presets[type].fx;
+                document.getElementById('fy').value = presets[type].fy;
+                updateEquationDisplay();
+                updateVectorField();
+            }
+        }
+        
+        // draw an arrow on the map
+        function createArrow(start, end, magnitude, maxMagnitude) {
+            // color based on magnitude - blue for small, red for big
+            const ratio = Math.min(magnitude / maxMagnitude, 1);
+            const hue = (1 - ratio) * 240; 
+            const color = `hsl(${hue}, 100%, 50%)`;
+            
+            // the arrow line
+            const arrow = L.polyline([start, end], {
+                color: color,
+                weight: 2,
+                opacity: 0.8
+            });
+            
+            // put a dot at the end so it looks like an arrow
+            const arrowHead = L.circleMarker(end, {
+                radius: 3,
+                fillColor: color,
+                fillOpacity: 1,
+                color: color,
+                weight: 1
+            });
+            
+            return L.layerGroup([arrow, arrowHead]);
+        }
+        
+        // main function to draw all the vectors
+        function updateVectorField() {
+            // remove old arrows
+            vectorFieldLayer.clearLayers();
+            
+            const density = 20; // fixed grid density
+            const scale = 1.0; // fixed scale
+            const fxExpr = document.getElementById('fx').value || '0';
+            const fyExpr = document.getElementById('fy').value || '0';
+            
+            // figure out what part of the map is visible
+            const bounds = map.getBounds();
+            const latMin = bounds.getSouth();
+            const latMax = bounds.getNorth();
+            const lngMin = bounds.getWest();
+            const lngMax = bounds.getEast();
+            
+            const latStep = (latMax - latMin) / density;
+            const lngStep = (lngMax - lngMin) / density;
+            
+            let maxMagnitude = 0;
+            const vectors = [];
+            
+            // calculate all the vectors first
+            for (let i = 0; i <= density; i++) {
+                for (let j = 0; j <= density; j++) {
+                    const lat = latMin + i * latStep;
+                    const lng = lngMin + j * lngStep;
+                    
+                    // convert map coords to x,y from -5 to 5
+                    const x = (lng - lngMin) / (lngMax - lngMin) * 10 - 5;
+                    const y = (lat - latMin) / (latMax - latMin) * 10 - 5;
+                    
+                    try {
+                        // calculate the vector at this point
+                        const vx = math.evaluate(fxExpr, { x: x, y: y });
+                        const vy = math.evaluate(fyExpr, { x: x, y: y });
+                        
+                        const magnitude = Math.sqrt(vx * vx + vy * vy);
+                        if (magnitude > maxMagnitude) maxMagnitude = magnitude;
+                        
+                        vectors.push({ lat, lng, vx, vy, magnitude });
+                    } catch (e) {
+                        console.error('bad equation:', e);
+                    }
+                }
+            }
+            
+            // now draw all the arrows
+            vectors.forEach(v => {
+                if (v.magnitude > 0.001) { // dont draw tiny vectors
+                    const normalizedMagnitude = v.magnitude / (maxMagnitude || 1);
+                    const arrowLength = normalizedMagnitude * scale * 0.005; 
+                    
+                    const start = [v.lat, v.lng];
+                    const end = [
+                        v.lat + v.vy * arrowLength,
+                        v.lng + v.vx * arrowLength
+                    ];
+                    
+                    const arrow = createArrow(start, end, v.magnitude, maxMagnitude);
+                    vectorFieldLayer.addLayer(arrow);
+                }
+            });
+        }
+        
+        // draw the initial field
+        updateVectorField();
+        
+        // redraw when the map moves
+        map.on('moveend', updateVectorField);
+        map.on('zoomend', updateVectorField);
+    </script>
+</body>
+</html>
